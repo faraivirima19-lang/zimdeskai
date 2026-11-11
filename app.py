@@ -36,9 +36,12 @@ def send_whatsapp(to, text):
     headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
     payload = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": text}}
     try:
-        requests.post(url, headers=headers, json=payload, timeout=10)
+        r = requests.post(url, headers=headers, json=payload, timeout=10)
+        print(f"send_whatsapp to={to} status={r.status_code} body={r.text[:500]}")
+        if r.status_code != 200:
+            print("send_whatsapp FAILED:", r.text)
     except Exception as e:
-        print("send_whatsapp error:", e)
+        print("send_whatsapp exception:", e)
 
 # Track conversation state
 user_sessions = {}   # phone -> emp_id
