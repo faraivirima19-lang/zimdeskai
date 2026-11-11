@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+fake_ad.json.bak
+.DS_Store
+Thumbs.db
+zimdeskai.zip
