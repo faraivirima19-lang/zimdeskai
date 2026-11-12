@@ -64,36 +64,31 @@ def cleanup_burn_links():
         del burn_links[t]
 
 def handle_message(user_id, text):
-    """Core bot logic. Returns a list of reply strings. Used by both WhatsApp webhook and web chat."""
     replies = []
     text = text.strip().lower()
     ad = load_ad()
 
-    # Admin: toggle service status via chat
     global SERVICE_DOWN, NOTIFY_ON_RESTORE
     if text == "service down":
         SERVICE_DOWN = True
-        replies.append("⚠️ Service marked as DOWN. Type 'service restore' to bring it back.")
+        replies.append("Service marked as DOWN. Type 'service restore' to bring it back.")
         return replies
     if text == "service restore":
         SERVICE_DOWN = False
-        replies.append("✅ Service restored. Users notified.")
+        replies.append("Service restored. Users notified.")
         return replies
 
-    # Service down handling
     if SERVICE_DOWN:
         with _service_lock:
             if user_id not in NOTIFY_ON_RESTORE:
                 NOTIFY_ON_RESTORE.append(user_id)
-        replies.append("⚠️ Service Unavailable: AD/Email services are currently down. IT is working to restore them. You will be notified when services are back. Sorry for the inconvenience.")
+        replies.append("Service Unavailable: AD/Email services are currently down. IT is working to restore them. You will be notified when services are back. Sorry for the inconvenience.")
         return replies
 
-    # 1. GREETING - ask for employee number first, no services until identified
     if text in ["hie", "hi", "hello", "hey", "mhoro", "hie zimdeskai"]:
         replies.append("Hie, I am ZimDeskAI, how can I help you?\n\nPlease provide your Employee Number (e.g. EMP001) to identify yourself before we can proceed.")
         return replies
 
-    # 2. IDENTIFY BY EMP NUMBER
     if text.upper().startswith("EMP"):
         emp_id = text.upper().split()[0]
         if emp_id in ad:
@@ -103,50 +98,59 @@ def handle_message(user_id, text):
                 return replies
             user_sessions[user_id] = emp_id
             status = "Active"
-            replies.append(f"Account Found ✅\nName: {user['name']}\nID: {emp_id}\nDept: {user['department']}\nEmail: {user['email']}\nStatus: {status}\n\nWhat do you want to do?\n- Type 'reset password'\n- Type 'my account'\n- Type 'wifi' for WiFi credentials")
+            role = user.get("role", "user")
+            role_label = "Admin" if role == "admin" else "User"
+            menu = "Account Found\nName: " + user['name'] + "\nID: " + emp_id + "\nDept: " + user['department'] + "\nEmail: " + user['email'] + "\nStatus: " + status + "\nRole: " + role_label + "\n\nWhat do you want to do?\n- Type 'reset password'\n- Type 'my account'\n- Type 'wifi' for WiFi credentials"
+            if role == "admin":
+                menu += "\n\nAdmin commands:\n- Type 'create account'\n- Type 'list users'\n- Type 'disable EMP00X'\n- Type 'enable EMP00X'"
+            replies.append(menu)
         else:
             replies.append("You are not authorized to use this application.")
         return replies
 
-    # Helper: check if user is identified
     emp_id = user_sessions.get(user_id)
     if not emp_id:
         replies.append("Please first provide your Employee Number e.g EMP001 to identify yourself.")
         return replies
 
-    # Verify emp_id still exists and is active
     if emp_id not in ad or not ad[emp_id].get("active", True):
-        del user_sessions[user_id]
+        if emp_id in user_sessions:
+            del user_sessions[user_id]
         replies.append("You are not authorized to use this application.")
         return replies
 
-    # 3. MY ACCOUNT
+    role = ad[emp_id].get("role", "user")
+    is_admin = (role == "admin")
+
     if "my account" in text or "who am i" in text:
         u = ad[emp_id]
-        replies.append(f"Your Record:\n{json.dumps(u, indent=2)}")
+        replies.append("Your Record:\n" + json.dumps(u, indent=2))
         return replies
 
-    # 4. RESET PASSWORD (with burn link)
     if "reset" in text and "password" in text:
         new_pass = generate_password()
         ad[emp_id]['password'] = new_pass
         save_ad(ad)
         link = make_burn_link(emp_id, new_pass)
-        replies.append(f"Password Recreated Successfully 🔐\nFor {emp_id} ({ad[emp_id]['name']})\n\nView your new password (one-time, expires in 5 min):\n{link}\n\nPlease log in and change it.")
+        replies.append("Password Recreated Successfully\nFor " + emp_id + " (" + ad[emp_id]['name'] + ")\n\nView your new password (one-time, expires in 5 min):\n" + link + "\n\nPlease log in and change it.")
         return replies
 
-    # WIFI CREDENTIALS
     if "wifi" in text:
         link = make_burn_link("WIFI", "13245678", link_type="wifi", extra={"network": "IT"})
-        replies.append(f"WiFi Credentials 🔐\nNetwork: IT\n\nView your WiFi password (one-time, expires in 5 min):\n{link}")
+        replies.append("WiFi Credentials\nNetwork: IT\n\nView your WiFi password (one-time, expires in 5 min):\n" + link)
         return replies
 
-    # 5. CREATE ACCOUNT - only for identified users
     if "create account" in text:
+        if not is_admin:
+            replies.append("You are not authorized to perform this action. Only admins can create accounts.")
+            return replies
         replies.append("Let's create account. Send in this format:\nCREATE EMP006 | Full Name | email | Department\nExample: CREATE EMP006 | Blessing Banda | blessing@zimdesk.local | IT")
         return replies
 
     if text.upper().startswith("CREATE EMP"):
+        if not is_admin:
+            replies.append("You are not authorized to perform this action. Only admins can create accounts.")
+            return replies
         try:
             parts = text.split("|")
             new_emp_id = parts[0].replace("create","").strip().upper()
@@ -155,18 +159,55 @@ def handle_message(user_id, text):
             dept = parts[3].strip()
 
             if new_emp_id in ad:
-                replies.append(f"{new_emp_id} already exists!")
+                replies.append(new_emp_id + " already exists!")
             else:
                 new_pass = generate_password()
-                ad[new_emp_id] = {"name": name, "email": email, "department": dept, "password": new_pass, "active": True}
+                ad[new_emp_id] = {"name": name, "email": email, "department": dept, "password": new_pass, "active": True, "role": "user"}
                 save_ad(ad)
                 link = make_burn_link(new_emp_id, new_pass)
-                replies.append(f"Account Created ✅\nID: {new_emp_id}\nName: {name}\nEmail: {email}\nDept: {dept}\n\nView your temp password (one-time, expires in 5 min):\n{link}")
+                replies.append("Account Created\nID: " + new_emp_id + "\nName: " + name + "\nEmail: " + email + "\nDept: " + dept + "\nRole: user\n\nView temp password (one-time, expires in 5 min):\n" + link)
         except Exception:
             replies.append("Wrong format. Use: CREATE EMP006 | Full Name | email | Department")
         return replies
 
-    # Default
+    if text == "list users" or text == "list all users":
+        if not is_admin:
+            replies.append("You are not authorized to perform this action.")
+            return replies
+        lines = ["All Users:"]
+        for eid, u in ad.items():
+            status = "Active" if u.get("active", True) else "Disabled"
+            role = u.get("role", "user")
+            lines.append(eid + ": " + u['name'] + " | " + u['department'] + " | " + status + " | " + role)
+        replies.append("\n".join(lines))
+        return replies
+
+    if text.startswith("disable "):
+        if not is_admin:
+            replies.append("You are not authorized to perform this action.")
+            return replies
+        target = text.replace("disable", "").strip().upper()
+        if target in ad:
+            ad[target]["active"] = False
+            save_ad(ad)
+            replies.append("User " + target + " (" + ad[target]['name'] + ") has been disabled.")
+        else:
+            replies.append("Employee " + target + " not found.")
+        return replies
+
+    if text.startswith("enable "):
+        if not is_admin:
+            replies.append("You are not authorized to perform this action.")
+            return replies
+        target = text.replace("enable", "").strip().upper()
+        if target in ad:
+            ad[target]["active"] = True
+            save_ad(ad)
+            replies.append("User " + target + " (" + ad[target]['name'] + ") has been enabled.")
+        else:
+            replies.append("Employee " + target + " not found.")
+        return replies
+
     replies.append("I didn't understand. Type 'hie' to start.")
     return replies
 
