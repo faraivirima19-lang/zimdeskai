@@ -1,7 +1,50 @@
 {
-  "EMP001": {"name": "Tafadzwa Moyo", "email": "tafa@zimdesk.local", "department": "IT", "password": "Pass@123", "active": true},
-  "EMP002": {"name": "Ruth Choto", "email": "ruth@zimdesk.local", "department": "HR", "password": "Hr@2024", "active": true},
-  "EMP003": {"name": "Kudakwashe Ncube", "email": "kuda@zimdesk.local", "department": "Finance", "password": "Fin@2024", "active": true},
-  "EMP004": {"name": "Anesu Mutasa", "email": "anesu@zimdesk.local", "department": "Sales", "password": "Sales@1", "active": true},
-  "EMP005": {"name": "Farai Dube", "email": "farai@zimdesk.local", "department": "IT", "password": "OldPass99", "active": false}
+  "EMP001": {
+    "name": "Tafadzwa Moyo",
+    "email": "tafa@zimdesk.local",
+    "department": "IT",
+    "password": "Pass@123",
+    "active": true,
+    "role": "admin"
+  },
+  "EMP002": {
+    "name": "Ruth Choto",
+    "email": "ruth@zimdesk.local",
+    "department": "HR",
+    "password": "Hr@2024",
+    "active": true,
+    "role": "user"
+  },
+  "EMP003": {
+    "name": "Kudakwashe Ncube",
+    "email": "kuda@zimdesk.local",
+    "department": "Finance",
+    "password": "Fin@2024",
+    "active": true,
+    "role": "user"
+  },
+  "EMP004": {
+    "name": "Anesu Mutasa",
+    "email": "anesu@zimdesk.local",
+    "department": "Sales",
+    "password": "Sales@1",
+    "active": true,
+    "role": "user"
+  },
+  "EMP005": {
+    "name": "Farai Dube",
+    "email": "farai@zimdesk.local",
+    "department": "IT",
+    "password": "OldPass99",
+    "active": false,
+    "role": "user"
+  },
+  "EMP006": {
+    "name": "Blessing Banda",
+    "email": "blessing@zimdesk.local",
+    "department": "it",
+    "password": "Zim@Q9fkGJ",
+    "active": true,
+    "role": "user"
+  }
 }
