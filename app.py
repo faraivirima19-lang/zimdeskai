@@ -293,9 +293,7 @@ CHAT_HTML = r'''<!DOCTYPE html>
   .typing { align-self: flex-start; background: #fff; padding: 10px 14px; border-radius: 8px; font-size: 12px; color: #888; font-style: italic; }
   .burn-link { display: inline-block; margin-top: 6px; padding: 6px 12px; background: #075e54; color: #fff; border-radius: 6px; text-decoration: none; font-size: 13px; }
   .burn-link:hover { background: #128c7e; }
-  .quick-btns { display: flex; gap: 6px; padding: 8px 10px; background: #f0f0f0; flex-wrap: wrap; }
-  .quick-btns button { background: #fff; border: 1px solid #ccc; border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-  .quick-btns button:hover { background: #e0e0e0; }
+  .quick-btns { display: none; }
 </style>
 </head>
 <body>
@@ -308,16 +306,7 @@ CHAT_HTML = r'''<!DOCTYPE html>
     </div>
   </div>
   <div class="chat-messages" id="messages"></div>
-  <div class="quick-btns">
-    <button onclick="sendQuick('hie')">hie</button>
-    <button onclick="sendQuick('EMP001')">EMP001</button>
-    <button onclick="sendQuick('EMP002')">EMP002</button>
-    <button onclick="sendQuick('reset password')">reset password</button>
-    <button onclick="sendQuick('my account')">my account</button>
-    <button onclick="sendQuick('create account')">create account</button>
-    <button onclick="sendQuick('service down')">service down</button>
-    <button onclick="sendQuick('service restore')">service restore</button>
-  </div>
+
   <div class="chat-input">
     <input type="text" id="input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendMessage()">
     <button onclick="sendMessage()">➤</button>
@@ -366,15 +355,7 @@ CHAT_HTML = r'''<!DOCTYPE html>
     }
   }
 
-  function sendQuick(text) {
-    input.value = text;
-    sendMessage();
-  }
-
-  // Auto-start
-  setTimeout(() => {
-    addMsg('Hie, I am ZimDeskAI, how can I help you?\n\n1. Type your Employee Number e.g EMP001 to identify\n2. Type "reset password"\n3. Type "create account"\n4. Type "my account"', false);
-  }, 500);
+  // Clean start - no auto-message, user types to begin
 </script>
 </body>
 </html>'''
