@@ -73,7 +73,7 @@ def handle_message(user_id, text):
 
     # 1. GREETING
     if text in ["hie", "hi", "hello", "hey", "mhoro", "hie zimdeskai"]:
-        replies.append("Hie, I am ZimDeskAI, how can I help you?\n\n1. Type your Employee Number e.g EMP001 to identify\n2. Type 'reset password'\n3. Type 'create account'\n4. Type 'my account'")
+        replies.append("Hie, I am ZimDeskAI, how can I help you?\n\n1. Type your Employee Number e.g EMP001 to identify\n2. Type 'reset password'\n3. Type 'create account'\n4. Type 'my account'\n5. Type 'wifi' for WiFi credentials")
         return replies
 
     # 2. IDENTIFY BY EMP NUMBER
@@ -111,6 +111,12 @@ def handle_message(user_id, text):
         replies.append(f"Password Recreated Successfully 🔐\nFor {emp_id} ({ad[emp_id]['name']})\n\nView your new password (one-time, expires in 5 min):\n{link}\n\nPlease log in and change it.")
         return replies
 
+    # WIFI CREDENTIALS
+    if "wifi" in text:
+        link = make_burn_link("WIFI", "13245678", link_type="wifi", extra={"network": "IT"})
+        replies.append(f"WiFi Credentials 🔐\nNetwork: IT\n\nView your WiFi password (one-time, expires in 5 min):\n{link}")
+        return replies
+
     # 5. CREATE ACCOUNT
     if "create account" in text:
         user_sessions[user_id + "_creating"] = True
@@ -141,13 +147,15 @@ def handle_message(user_id, text):
     replies.append("I didn't understand. Type 'hie' to start.")
     return replies
 
-def make_burn_link(emp_id, password):
+def make_burn_link(emp_id, password, link_type="password", extra=None):
     token = ''.join(random.choices(string.ascii_letters + string.digits, k=24))
     burn_links[token] = {
         "emp_id": emp_id,
         "password": password,
         "expires": time.time() + BURN_TTL,
         "used": False,
+        "type": link_type,
+        "extra": extra or {},
     }
     return f"{BASE_URL}/burn/{token}"
 
@@ -187,8 +195,21 @@ def burn(token):
                 "</body></html>"), 410
     # Mark as used immediately (one-time view)
     data["used"] = True
+    link_type = data.get("type", "password")
     emp_id = data["emp_id"]
     password = data["password"]
+    extra = data.get("extra", {})
+
+    if link_type == "wifi":
+        network = extra.get("network", "IT")
+        html = (f"<!DOCTYPE html><html><body style='font-family:Arial;text-align:center;padding:40px'>"
+                f"<h2>WiFi Credentials ✅</h2>"
+                f"<p><b>Network Name:</b> <code style='font-size:18px'>{network}</code></p>"
+                f"<p><b>Password:</b> <code style='font-size:18px'>{password}</code></p>"
+                f"<p style='color:#888'>This link has now expired. Keep your WiFi password safe.</p>"
+                f"</body></html>")
+        return html, 200
+
     # Try to fetch name
     try:
         ad = load_ad()
