@@ -97,10 +97,9 @@ def handle_message(user_id, text):
                 replies.append("You are not authorized to use this application. Your account is disabled.")
                 return replies
             user_sessions[user_id] = emp_id
-            status = "Active"
             role = user.get("role", "user")
-            role_label = "Admin" if role == "admin" else "User"
-            menu = "Account Found\nName: " + user['name'] + "\nID: " + emp_id + "\nDept: " + user['department'] + "\nEmail: " + user['email'] + "\nStatus: " + status + "\nRole: " + role_label + "\n\nWhat do you want to do?\n- Type 'reset password'\n- Type 'my account'\n- Type 'wifi' for WiFi credentials"
+            first_name = user['name'].split()[0]
+            menu = "Greetings " + first_name + ", how can I help you today?\n\nWhat do you want to do?\n- Type 'reset password'\n- Type 'my account' (to view your details)\n- Type 'wifi' for WiFi credentials"
             if role == "admin":
                 menu += "\n\nAdmin commands:\n- Type 'create account'\n- Type 'list users'\n- Type 'disable EMP00X'\n- Type 'enable EMP00X'"
             replies.append(menu)
