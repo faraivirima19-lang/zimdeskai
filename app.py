@@ -288,7 +288,7 @@ def handle_message(user_id, text):
         return replies
 
     # Default
-    replies.append("I didn't understand. Type 'hie' to start.")
+    replies.append("The service you requested does not exist. Please type 'hie' to see available options.")
     return replies
 
 # ---- Webhook verification (Meta) ----
