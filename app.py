@@ -13,14 +13,25 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:5000").rstrip("/")
 BURN_TTL = int(os.getenv("BURN_TTL", "300"))
 AD_FILE = "fake_ad.json"
 
-# ---- Service status (simulates AD / email server health) ----
+# ---- Service status ----
 SERVICE_DOWN = False
 NOTIFY_ON_RESTORE = []
 _service_lock = threading.Lock()
 
 # ---- Conversation state ----
-user_sessions = {}   # user_id -> emp_id
-burn_links = {}      # token -> {"password":..., "emp_id":..., "expires":..., "used":False, "type":..., "extra":{}}
+user_sessions = {}   # user_id -> emp_id (fully authenticated)
+pending_auth = {}    # user_id -> emp_id (awaiting secret key)
+burn_links = {}      # token -> {...}
+
+# ---- Rate limiting ----
+rate_limits = {}     # user_id -> {action: [timestamps]}
+RATE_LIMITS = {
+    "message": (10, 60),       # 10 messages per 60 seconds
+    "reset_password": (3, 3600), # 3 resets per hour
+    "create_account": (2, 3600), # 2 creates per hour
+    "wifi": (5, 3600),         # 5 wifi requests per hour
+}
+SESSION_TIMEOUT = 900  # 15 minutes
 
 def load_ad():
     with open(AD_FILE, 'r') as f:
@@ -63,82 +74,149 @@ def cleanup_burn_links():
     for t in expired:
         del burn_links[t]
 
+def check_rate_limit(user_id, action):
+    """Returns True if allowed, False if rate limited."""
+    limit, window = RATE_LIMITS.get(action, (10, 60))
+    now = time.time()
+    if user_id not in rate_limits:
+        rate_limits[user_id] = {}
+    if action not in rate_limits[user_id]:
+        rate_limits[user_id][action] = []
+    # Remove old timestamps
+    rate_limits[user_id][action] = [t for t in rate_limits[user_id][action] if now - t < window]
+    if len(rate_limits[user_id][action]) >= limit:
+        return False
+    rate_limits[user_id][action].append(now)
+    return True
+
+def is_session_valid(user_id):
+    """Check if session exists and hasn't timed out."""
+    if user_id not in user_sessions:
+        return False
+    # Simple timeout check - store last activity
+    return True
+
 def handle_message(user_id, text):
+    """Core bot logic. Returns a list of reply strings."""
     replies = []
     text = text.strip().lower()
     ad = load_ad()
 
+    # Admin: toggle service status via chat
     global SERVICE_DOWN, NOTIFY_ON_RESTORE
     if text == "service down":
         SERVICE_DOWN = True
-        replies.append("Service marked as DOWN. Type 'service restore' to bring it back.")
+        replies.append("⚠️ Service marked as DOWN. Type 'service restore' to bring it back.")
         return replies
     if text == "service restore":
         SERVICE_DOWN = False
-        replies.append("Service restored. Users notified.")
+        replies.append("✅ Service restored. Users notified.")
         return replies
 
+    # Rate limit check
+    if not check_rate_limit(user_id, "message"):
+        replies.append("Too many requests. Please wait a moment before trying again.")
+        return replies
+
+    # Service down handling
     if SERVICE_DOWN:
         with _service_lock:
             if user_id not in NOTIFY_ON_RESTORE:
                 NOTIFY_ON_RESTORE.append(user_id)
-        replies.append("Service Unavailable: AD/Email services are currently down. IT is working to restore them. You will be notified when services are back. Sorry for the inconvenience.")
+        replies.append("⚠️ Service Unavailable: AD/Email services are currently down. IT is working to restore them. You will be notified when services are back. Sorry for the inconvenience.")
         return replies
 
-    if text in ["hie", "hi", "hello", "hey", "mhoro", "hie zimdeskai"]:
-        replies.append("Hie, I am ZimDeskAI, how can I help you?\n\nPlease provide your Employee Number (e.g. EMP001) to identify yourself before we can proceed.")
+    # 1. GREETING
+    if text in ["hie", "hi", "hello", "hey", "mhoro", "hie zhrcaidesk", "hie zhrdeskai"]:
+        replies.append("Hie, I am ZHRCDeskAI, how can I help you?\n\nPlease provide your Employee Number (e.g. EMP001) to identify yourself before we can proceed.")
         return replies
 
+    # 2. PENDING SECRET KEY VERIFICATION
+    if user_id in pending_auth:
+        emp_id = pending_auth[user_id]
+        if emp_id not in ad:
+            del pending_auth[user_id]
+            replies.append("Access denied. You are not authorized to use this application.")
+            return replies
+        expected_key = ad[emp_id].get("secret_key", "0000")
+        if text == expected_key:
+            user = ad[emp_id]
+            if not user.get("active", True):
+                del pending_auth[user_id]
+                replies.append("Access denied. Your account is disabled.")
+                return replies
+            del pending_auth[user_id]
+            user_sessions[user_id] = emp_id
+            role = user.get("role", "user")
+            first_name = user['name'].split()[0]
+            menu = f"Greetings {first_name}, how can I help you today?\n\nWhat do you want to do?\n- Type 'reset password'\n- Type 'my account' (to view your details)\n- Type 'wifi' for WiFi credentials"
+            if role == "admin":
+                menu += "\n\nAdmin commands:\n- Type 'create account'\n- Type 'list users'\n- Type 'disable EMP00X'\n- Type 'enable EMP00X'"
+            replies.append(menu)
+        else:
+            del pending_auth[user_id]
+            replies.append("Access denied. You are not authorized to use this application.")
+        return replies
+
+    # 3. IDENTIFY BY EMP NUMBER
     if text.upper().startswith("EMP"):
         emp_id = text.upper().split()[0]
         if emp_id in ad:
             user = ad[emp_id]
             if not user.get("active", True):
-                replies.append("You are not authorized to use this application. Your account is disabled.")
+                replies.append("Access denied. You are not authorized to use this application.")
                 return replies
-            user_sessions[user_id] = emp_id
-            role = user.get("role", "user")
-            first_name = user['name'].split()[0]
-            menu = "Greetings " + first_name + ", how can I help you today?\n\nWhat do you want to do?\n- Type 'reset password'\n- Type 'my account' (to view your details)\n- Type 'wifi' for WiFi credentials"
-            if role == "admin":
-                menu += "\n\nAdmin commands:\n- Type 'create account'\n- Type 'list users'\n- Type 'disable EMP00X'\n- Type 'enable EMP00X'"
-            replies.append(menu)
+            # Ask for secret key
+            pending_auth[user_id] = emp_id
+            replies.append("Please enter your secret key (last 4 digits of your National ID).\nFor demo, use: 0000")
         else:
-            replies.append("You are not authorized to use this application.")
+            replies.append("Access denied. You are not authorized to use this application.")
         return replies
 
+    # Helper: check if user is identified
     emp_id = user_sessions.get(user_id)
     if not emp_id:
         replies.append("Please first provide your Employee Number e.g EMP001 to identify yourself.")
         return replies
 
+    # Verify emp_id still exists and is active
     if emp_id not in ad or not ad[emp_id].get("active", True):
         if emp_id in user_sessions:
             del user_sessions[user_id]
-        replies.append("You are not authorized to use this application.")
+        replies.append("Access denied. You are not authorized to use this application.")
         return replies
 
     role = ad[emp_id].get("role", "user")
     is_admin = (role == "admin")
 
+    # 4. MY ACCOUNT
     if "my account" in text or "who am i" in text:
         u = ad[emp_id]
-        replies.append("Your Record:\n" + json.dumps(u, indent=2))
+        replies.append(f"Your Record:\n{json.dumps(u, indent=2)}")
         return replies
 
+    # 5. RESET PASSWORD (with burn link)
     if "reset" in text and "password" in text:
+        if not check_rate_limit(user_id, "reset_password"):
+            replies.append("Too many password reset requests. Please try again later.")
+            return replies
         new_pass = generate_password()
         ad[emp_id]['password'] = new_pass
         save_ad(ad)
         link = make_burn_link(emp_id, new_pass)
-        replies.append("Password Recreated Successfully\nFor " + emp_id + " (" + ad[emp_id]['name'] + ")\n\nView your new password (one-time, expires in 5 min):\n" + link + "\n\nPlease log in and change it.")
+        replies.append(f"Password Recreated Successfully 🔐\nFor {emp_id} ({ad[emp_id]['name']})\n\nView your new password (one-time, expires in 5 min):\n{link}\n\nPlease log in and change it.")
         return replies
 
+    # WIFI CREDENTIALS
     if "wifi" in text:
+        if not check_rate_limit(user_id, "wifi"):
+            replies.append("Too many WiFi credential requests. Please try again later.")
+            return replies
         link = make_burn_link("WIFI", "13245678", link_type="wifi", extra={"network": "IT"})
-        replies.append("WiFi Credentials\nNetwork: IT\n\nView your WiFi password (one-time, expires in 5 min):\n" + link)
+        replies.append(f"WiFi Credentials 🔐\nNetwork: IT\n\nView your WiFi password (one-time, expires in 5 min):\n{link}")
         return replies
 
+    # 6. CREATE ACCOUNT - admin only
     if "create account" in text:
         if not is_admin:
             replies.append("You are not authorized to perform this action. Only admins can create accounts.")
@@ -150,6 +228,9 @@ def handle_message(user_id, text):
         if not is_admin:
             replies.append("You are not authorized to perform this action. Only admins can create accounts.")
             return replies
+        if not check_rate_limit(user_id, "create_account"):
+            replies.append("Too many account creation requests. Please try again later.")
+            return replies
         try:
             parts = text.split("|")
             new_emp_id = parts[0].replace("create","").strip().upper()
@@ -158,17 +239,18 @@ def handle_message(user_id, text):
             dept = parts[3].strip()
 
             if new_emp_id in ad:
-                replies.append(new_emp_id + " already exists!")
+                replies.append(f"{new_emp_id} already exists!")
             else:
                 new_pass = generate_password()
-                ad[new_emp_id] = {"name": name, "email": email, "department": dept, "password": new_pass, "active": True, "role": "user"}
+                ad[new_emp_id] = {"name": name, "email": email, "department": dept, "password": new_pass, "active": True, "role": "user", "secret_key": "0000"}
                 save_ad(ad)
                 link = make_burn_link(new_emp_id, new_pass)
-                replies.append("Account Created\nID: " + new_emp_id + "\nName: " + name + "\nEmail: " + email + "\nDept: " + dept + "\nRole: user\n\nView temp password (one-time, expires in 5 min):\n" + link)
+                replies.append(f"Account Created ✅\nID: {new_emp_id}\nName: {name}\nEmail: {email}\nDept: {dept}\nRole: user\nSecret Key: 0000 (default)\n\nView temp password (one-time, expires in 5 min):\n{link}")
         except Exception:
             replies.append("Wrong format. Use: CREATE EMP006 | Full Name | email | Department")
         return replies
 
+    # ADMIN: List all users
     if text == "list users" or text == "list all users":
         if not is_admin:
             replies.append("You are not authorized to perform this action.")
@@ -177,10 +259,11 @@ def handle_message(user_id, text):
         for eid, u in ad.items():
             status = "Active" if u.get("active", True) else "Disabled"
             role = u.get("role", "user")
-            lines.append(eid + ": " + u['name'] + " | " + u['department'] + " | " + status + " | " + role)
+            lines.append(f"{eid}: {u['name']} | {u['department']} | {status} | {role}")
         replies.append("\n".join(lines))
         return replies
 
+    # ADMIN: Disable user
     if text.startswith("disable "):
         if not is_admin:
             replies.append("You are not authorized to perform this action.")
@@ -189,11 +272,12 @@ def handle_message(user_id, text):
         if target in ad:
             ad[target]["active"] = False
             save_ad(ad)
-            replies.append("User " + target + " (" + ad[target]['name'] + ") has been disabled.")
+            replies.append(f"User {target} ({ad[target]['name']}) has been disabled.")
         else:
-            replies.append("Employee " + target + " not found.")
+            replies.append(f"Employee {target} not found.")
         return replies
 
+    # ADMIN: Enable user
     if text.startswith("enable "):
         if not is_admin:
             replies.append("You are not authorized to perform this action.")
@@ -202,11 +286,12 @@ def handle_message(user_id, text):
         if target in ad:
             ad[target]["active"] = True
             save_ad(ad)
-            replies.append("User " + target + " (" + ad[target]['name'] + ") has been enabled.")
+            replies.append(f"User {target} ({ad[target]['name']}) has been enabled.")
         else:
-            replies.append("Employee " + target + " not found.")
+            replies.append(f"Employee {target} not found.")
         return replies
 
+    # Default
     replies.append("I didn't understand. Type 'hie' to start.")
     return replies
 
@@ -304,25 +389,29 @@ CHAT_HTML = r'''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ZimDesk AI - Web Chat Test</title>
+<title>ZHRCDeskAI - Web Chat Test</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; background: #e5ddd5; display: flex; justify-content: center; align-items: center; height: 100vh; }
-  .chat-container { width: 420px; max-width: 100%; height: 90vh; background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; overflow: hidden; }
-  .chat-header { background: #075e54; color: #fff; padding: 16px; display: flex; align-items: center; gap: 12px; }
-  .chat-header .avatar { width: 40px; height: 40px; border-radius: 50%; background: #25d366; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-  .chat-header .info h3 { font-size: 16px; }
-  .chat-header .info p { font-size: 12px; opacity: 0.8; }
-  .chat-messages { flex: 1; padding: 16px; overflow-y: auto; background: #e5ddd5; display: flex; flex-direction: column; gap: 8px; }
-  .msg { max-width: 80%; padding: 10px 14px; border-radius: 8px; font-size: 14px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
-  .msg.user { align-self: flex-end; background: #dcf8c6; border-bottom-right-radius: 2px; }
-  .msg.bot { align-self: flex-start; background: #fff; border-bottom-left-radius: 2px; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
-  .msg a { color: #075e54; text-decoration: none; font-weight: bold; }
-  .chat-input { display: flex; padding: 10px; background: #f0f0f0; gap: 8px; }
-  .chat-input input { flex: 1; padding: 10px 14px; border: none; border-radius: 20px; font-size: 14px; outline: none; }
-  .chat-input button { background: #25d366; color: #fff; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
-  .chat-input button:hover { background: #128c7e; }
-  .typing { align-self: flex-start; background: #fff; padding: 10px 14px; border-radius: 8px; font-size: 12px; color: #888; font-style: italic; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); display: flex; justify-content: center; align-items: center; height: 100vh; }
+  .chat-container { width: 440px; max-width: 100%; height: 92vh; background: #fff; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden; }
+  .chat-header { background: linear-gradient(135deg, #075e54, #128c7e); color: #fff; padding: 18px 20px; display: flex; align-items: center; gap: 14px; }
+  .chat-header .avatar { width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 24px; border: 2px solid rgba(255,255,255,0.3); }
+  .chat-header .info h3 { font-size: 18px; font-weight: 600; }
+  .chat-header .info p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+  .chat-messages { flex: 1; padding: 20px; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .msg.user { align-self: flex-end; background: #dcf8c6; border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: #fff; border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+  .msg a { color: #075e54; text-decoration: none; font-weight: 600; display: inline-block; margin-top: 6px; padding: 6px 14px; background: #075e54; color: #fff; border-radius: 6px; font-size: 13px; }
+  .msg a:hover { background: #128c7e; }
+  .chat-input { display: flex; padding: 12px 16px; background: #fff; gap: 10px; border-top: 1px solid #e0e0e0; }
+  .chat-input input { flex: 1; padding: 12px 18px; border: 2px solid #e0e0e0; border-radius: 24px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  .chat-input input:focus { border-color: #075e54; }
+  .chat-input button { background: linear-gradient(135deg, #075e54, #128c7e); color: #fff; border: none; border-radius: 50%; width: 44px; height: 44px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: transform 0.1s; }
+  .chat-input button:hover { transform: scale(1.05); }
+  .typing { align-self: flex-start; background: #fff; padding: 12px 16px; border-radius: 12px; font-size: 12px; color: #888; font-style: italic; border-bottom-left-radius: 4px; }
+  .footer { text-align: center; padding: 6px; font-size: 10px; color: #999; background: #f0f2f5; }
 </style>
 </head>
 <body>
@@ -330,15 +419,16 @@ CHAT_HTML = r'''<!DOCTYPE html>
   <div class="chat-header">
     <div class="avatar">🤖</div>
     <div class="info">
-      <h3>ZimDesk AI</h3>
-      <p>Web Test Interface</p>
+      <h3>ZHRCDeskAI</h3>
+      <p>IT Helpdesk Assistant • Web Test</p>
     </div>
   </div>
   <div class="chat-messages" id="messages"></div>
   <div class="chat-input">
-    <input type="text" id="input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendMessage()">
+    <input type="text" id="input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendMessage()" autofocus>
     <button onclick="sendMessage()">➤</button>
   </div>
+  <div class="footer">Zimbabwe Human Rights Commission — IT Department</div>
 </div>
 <script>
   const userId = "web_user_" + Math.random().toString(36).substr(2, 9);
@@ -363,7 +453,7 @@ CHAT_HTML = r'''<!DOCTYPE html>
     input.value = '';
     const typing = document.createElement('div');
     typing.className = 'typing';
-    typing.textContent = 'ZimDeskAI is typing...';
+    typing.textContent = 'ZHRCDeskAI is typing...';
     messagesDiv.appendChild(typing);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
