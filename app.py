@@ -147,12 +147,8 @@ def handle_message(user_id, text):
                 return replies
             del pending_auth[user_id]
             user_sessions[user_id] = emp_id
-            role = user.get("role", "user")
-            first_name = user['name'].split()[0]
-            menu = f"Greetings {first_name}, how can I help you today?\n\nWhat do you want to do?\n- Type 'reset password'\n- Type 'my account' (to view your details)\n- Type 'wifi' for WiFi credentials"
-            if role == "admin":
-                menu += "\n\nAdmin commands:\n- Type 'create account'\n- Type 'list users'\n- Type 'disable EMP00X'\n- Type 'enable EMP00X'"
-            replies.append(menu)
+            first_name = user["name"].split()[0]
+            replies.append("Greetings " + first_name + ", how can I help you today?")
         else:
             del pending_auth[user_id]
             replies.append("Access denied. You are not authorized to use this application.")
