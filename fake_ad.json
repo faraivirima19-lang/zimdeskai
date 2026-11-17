@@ -1,10 +1,10 @@
 {
   "EMP001": {
-    "name": "Tafadzwa Moyo",
-    "username": "tafadzwa.moyo",
-    "email": "tafa@zimdesk.local",
+    "name": "Farai Moyo",
+    "username": "farai.moyo",
+    "email": "farai@zimdesk.local",
     "department": "IT",
-    "password": "Pass@123",
+    "password": "Zim@aq55Lo",
     "active": true,
     "role": "admin",
     "secret_key": "0000"
@@ -34,7 +34,7 @@
     "username": "anesu.mutasa",
     "email": "anesu@zimdesk.local",
     "department": "Sales",
-    "password": "Sales@1",
+    "password": "Zim@3he3Vh",
     "active": true,
     "role": "user",
     "secret_key": "0000"
