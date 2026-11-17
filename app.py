@@ -476,7 +476,7 @@ CHAT_HTML = r'''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ZHRCDeskAI - Web Chat Test</title>
+<title>ZHRCDeskAI</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); display: flex; justify-content: center; align-items: center; height: 100vh; }
@@ -507,7 +507,7 @@ CHAT_HTML = r'''<!DOCTYPE html>
     <div class="avatar">🤖</div>
     <div class="info">
       <h3>ZHRCDeskAI</h3>
-      <p>IT Helpdesk Assistant • Web Test</p>
+      <p>IT Helpdesk Assistant</p>
     </div>
   </div>
   <div class="chat-messages" id="messages"></div>
