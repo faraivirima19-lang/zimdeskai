@@ -1,7 +1,52 @@
 {
-  "EMP001": {"name": "Tafadzwa Moyo", "email": "tafa@zimdesk.local", "department": "IT", "password": "Pass@123", "active": true, "role": "admin", "secret_key": "0000"},
-  "EMP002": {"name": "Ruth Choto", "email": "ruth@zimdesk.local", "department": "HR", "password": "Hr@2024", "active": true, "role": "user", "secret_key": "0000"},
-  "EMP003": {"name": "Kudakwashe Ncube", "email": "kuda@zimdesk.local", "department": "Finance", "password": "Fin@2024", "active": true, "role": "user", "secret_key": "0000"},
-  "EMP004": {"name": "Anesu Mutasa", "email": "anesu@zimdesk.local", "department": "Sales", "password": "Sales@1", "active": true, "role": "user", "secret_key": "0000"},
-  "EMP005": {"name": "Farai Dube", "email": "farai@zimdesk.local", "department": "IT", "password": "OldPass99", "active": false, "role": "user", "secret_key": "0000"}
+  "EMP001": {
+    "name": "Tafadzwa Moyo",
+    "username": "tafadzwa.moyo",
+    "email": "tafa@zimdesk.local",
+    "department": "IT",
+    "password": "Pass@123",
+    "active": true,
+    "role": "admin",
+    "secret_key": "0000"
+  },
+  "EMP002": {
+    "name": "Ruth Choto",
+    "username": "ruth.choto",
+    "email": "ruth@zimdesk.local",
+    "department": "HR",
+    "password": "Zim@o8G95h",
+    "active": true,
+    "role": "user",
+    "secret_key": "0000"
+  },
+  "EMP003": {
+    "name": "Kudakwashe Ncube",
+    "username": "kudakwashe.ncube",
+    "email": "kuda@zimdesk.local",
+    "department": "Finance",
+    "password": "Zim@dG08SS",
+    "active": true,
+    "role": "user",
+    "secret_key": "0000"
+  },
+  "EMP004": {
+    "name": "Anesu Mutasa",
+    "username": "anesu.mutasa",
+    "email": "anesu@zimdesk.local",
+    "department": "Sales",
+    "password": "Sales@1",
+    "active": true,
+    "role": "user",
+    "secret_key": "0000"
+  },
+  "EMP005": {
+    "name": "Farai Dube",
+    "username": "farai.dube",
+    "email": "farai@zimdesk.local",
+    "department": "IT",
+    "password": "OldPass99",
+    "active": false,
+    "role": "user",
+    "secret_key": "0000"
+  }
 }

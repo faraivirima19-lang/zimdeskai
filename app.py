@@ -191,16 +191,35 @@ def handle_message(user_id, text):
         replies.append(f"Your Record:\n{json.dumps(u, indent=2)}")
         return replies
 
-    # 5. RESET PASSWORD (with burn link)
-    if "reset" in text and "password" in text:
+    # 5. RESET PASSWORD / AD PASSWORD (with burn link)
+    ad_reset_triggers = ("reset" in text and "password" in text) or text in [
+        "ad password", "reset ad password", "ad credentials", "ad account",
+        "active directory password", "ad reset", "reset ad", "ad pwd",
+    ] or ("active directory" in text and "password" in text)
+    if ad_reset_triggers:
         if not check_rate_limit(user_id, "reset_password"):
             replies.append("Too many password reset requests. Please try again later.")
             return replies
+        # Verify the user is registered in Active Directory
+        if emp_id not in ad:
+            replies.append("You are not registered in Active Directory. Please contact IT.")
+            return replies
+        user = ad[emp_id]
+        if not user.get("active", True):
+            replies.append("Your account is disabled in Active Directory. Please contact IT.")
+            return replies
+        ad_username = user.get("username") or (user.get("email", "").split("@")[0] if user.get("email") else emp_id.lower())
         new_pass = generate_password()
         ad[emp_id]['password'] = new_pass
         save_ad(ad)
-        link = make_burn_link(emp_id, new_pass)
-        replies.append(f"Password Recreated Successfully 🔐\nFor {emp_id} ({ad[emp_id]['name']})\n\nView your new password (one-time, expires in 5 min):\n{link}\n\nPlease log in and change it.")
+        link = make_burn_link(emp_id, new_pass, link_type="ad_password", extra={"username": ad_username})
+        replies.append(
+            f"Active Directory Password Reset 🔐\n"
+            f"Employee: {emp_id} ({user['name']})\n"
+            f"AD Username: {ad_username}\n\n"
+            f"View your new AD password (one-time, expires in 5 min):\n{link}\n\n"
+            f"Please log in and change it."
+        )
         return replies
 
     # WIFI CREDENTIALS
@@ -291,7 +310,8 @@ def handle_message(user_id, text):
     if " ".join(text.split()) == "show available services":
         services = [
             "My Account - view your employee record",
-            "Reset Password - generate a new password",
+            "Reset Password / AD Password - reset your Active Directory password",
+            "AD Credentials - show AD username and reset AD password",
             "WiFi - get IT WiFi credentials",
         ]
         if is_admin:
@@ -356,11 +376,15 @@ def burn(token):
     try:
         ad = load_ad()
         name = ad.get(emp_id, {}).get("name", emp_id)
+        username = extra.get("username") or ad.get(emp_id, {}).get("username") or emp_id
     except Exception:
         name = emp_id
+        username = extra.get("username", emp_id)
+    title = "Active Directory Password Reset ✅" if link_type == "ad_password" else "Password Reset ✅"
     html = (f"<!DOCTYPE html><html><body style='font-family:Arial;text-align:center;padding:40px'>"
-            f"<h2>Password Reset ✅</h2>"
+            f"<h2>{title}</h2>"
             f"<p><b>Employee:</b> {emp_id} ({name})</p>"
+            f"<p><b>AD Username:</b> <code style='font-size:18px'>{username}</code></p>"
             f"<p><b>New Password:</b> <code style='font-size:18px'>{password}</code></p>"
             f"<p style='color:#888'>This link has now expired. Please log in and change your password.</p>"
             f"</body></html>")
