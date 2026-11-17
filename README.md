@@ -8,6 +8,8 @@ A WhatsApp chatbot for IT helpdesk tasks (password reset, account creation) usin
 - Reset password → one-time burn link (expires in 5 min)
 - Create new account → temp password via burn link
 - My account lookup
+- `show available services` → lists all available services (authenticated users only)
+- Any unavailable/unknown service → prompts user to type `show available services`
 - Service-down handling + auto-notify users when restored
 
 ## Run locally

@@ -287,8 +287,26 @@ def handle_message(user_id, text):
             replies.append(f"Employee {target} not found.")
         return replies
 
-    # Default
-    replies.append("The service you requested does not exist. Please type 'hie' to see available options.")
+    # SHOW AVAILABLE SERVICES (authenticated users only)
+    if " ".join(text.split()) == "show available services":
+        services = [
+            "My Account - view your employee record",
+            "Reset Password - generate a new password",
+            "WiFi - get IT WiFi credentials",
+        ]
+        if is_admin:
+            services += [
+                "Create Account - create a new employee account",
+                "List Users - list all users",
+                "Disable <EMP_ID> - disable an employee account",
+                "Enable <EMP_ID> - enable an employee account",
+            ]
+        replies.append("Available Services:\n" + "\n".join(f"- {s}" for s in services) +
+                       "\n\nType any of the above to use a service.")
+        return replies
+
+    # Default - unavailable service
+    replies.append('The service you are looking for is unavailable, please type "show available services".')
     return replies
 
 # ---- Webhook verification (Meta) ----
