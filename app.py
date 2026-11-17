@@ -472,6 +472,7 @@ CHAT_HTML = r'''<!DOCTYPE html>
   const userId = "web_user_" + Math.random().toString(36).substr(2, 9);
   const messagesDiv = document.getElementById('messages');
   const input = document.getElementById('input');
+  const userMsgDivs = [];
 
   function addMsg(text, isUser) {
     const div = document.createElement('div');
@@ -481,6 +482,7 @@ CHAT_HTML = r'''<!DOCTYPE html>
     });
     div.innerHTML = html;
     messagesDiv.appendChild(div);
+    if (isUser) userMsgDivs.push(div);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   }
 
@@ -503,6 +505,20 @@ CHAT_HTML = r'''<!DOCTYPE html>
       });
       const data = await res.json();
       typing.remove();
+      const loggedIn = data.replies.some(r => r.includes('Greetings'));
+      if (loggedIn) {
+        for (let i = 0; i < 2 && userMsgDivs.length; i++) {
+          const d = userMsgDivs.pop();
+          d.style.display = 'none';
+        }
+        const note = document.createElement('div');
+        note.className = 'msg bot';
+        note.style.fontStyle = 'italic';
+        note.style.color = '#888';
+        note.style.fontSize = '12px';
+        note.textContent = '🔒 Credentials hidden for security.';
+        messagesDiv.appendChild(note);
+      }
       for (const reply of data.replies) {
         addMsg(reply, false);
       }
