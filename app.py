@@ -433,7 +433,7 @@ def burn(token):
     html = (f"<!DOCTYPE html><html><body style='font-family:Arial;text-align:center;padding:40px'>"
             f"<h2>{title}</h2>"
             f"<p><b>Employee:</b> {emp_id} ({name})</p>"
-            f"<p><b>AD Username:</b> <code style='font-size:18px'>{username}</code></p>"
+            f"<p><b>{'Email' if link_type == 'email_password' else 'AD Username'}:</b> <code style='font-size:18px'>{username}</code></p>"
             f"<p><b>New Password:</b> <code style='font-size:18px'>{password}</code></p>"
             f"<p style='color:#888'>This link has now expired. Please log in and change your password.</p>"
             f"</body></html>")
