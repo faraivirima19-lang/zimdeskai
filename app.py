@@ -30,6 +30,7 @@ RATE_LIMITS = {
     "reset_password": (3, 3600), # 3 resets per hour
     "create_account": (2, 3600), # 2 creates per hour
     "wifi": (5, 3600),         # 5 wifi requests per hour
+    "email": (5, 3600),        # 5 email credential requests per hour
 }
 SESSION_TIMEOUT = 900  # 15 minutes
 
@@ -100,6 +101,7 @@ def handle_message(user_id, text):
     """Core bot logic. Returns a list of reply strings."""
     replies = []
     text = text.strip().lower()
+    norm = " ".join(text.split())
     ad = load_ad()
 
     # Admin: toggle service status via chat
@@ -186,16 +188,22 @@ def handle_message(user_id, text):
     is_admin = (role == "admin")
 
     # 4. MY ACCOUNT
-    if "my account" in text or "who am i" in text:
+    if ("my account" in text or "who am i" in text or "my info" in text
+            or "profile" in text or text in ["account", "me", "my details", "my record"]):
         u = ad[emp_id]
         replies.append(f"Your Record:\n{json.dumps(u, indent=2)}")
         return replies
 
     # 5. RESET PASSWORD / AD PASSWORD (with burn link)
-    ad_reset_triggers = ("reset" in text and "password" in text) or text in [
-        "ad password", "reset ad password", "ad credentials", "ad account",
-        "active directory password", "ad reset", "reset ad", "ad pwd",
-    ] or ("active directory" in text and "password" in text)
+    ad_tokens = set(norm.split())
+    ad_reset_triggers = (
+        ("reset" in text and "password" in text)
+        or text in ["ad", "active", "active directory", "ad credentials", "ad password", "ad account",
+                    "ad pwd", "active dir", "activedirectory", "ad reset", "reset ad",
+                    "active directory password", "reset ad password"]
+        or "active" in ad_tokens or "ad" in ad_tokens
+        or "active directory" in norm
+    )
     if ad_reset_triggers:
         if not check_rate_limit(user_id, "reset_password"):
             replies.append("Too many password reset requests. Please try again later.")
@@ -222,8 +230,34 @@ def handle_message(user_id, text):
         )
         return replies
 
+    # EMAIL CREDENTIALS (reset + show)
+    if "email" in text or "mail" in text:
+        if not check_rate_limit(user_id, "email"):
+            replies.append("Too many email credential requests. Please try again later.")
+            return replies
+        if emp_id not in ad:
+            replies.append("You are not registered in Active Directory. Please contact IT.")
+            return replies
+        user = ad[emp_id]
+        if not user.get("active", True):
+            replies.append("Your account is disabled. Please contact IT.")
+            return replies
+        email_addr = user.get("email", "")
+        new_pass = generate_password()
+        ad[emp_id]['password'] = new_pass
+        save_ad(ad)
+        link = make_burn_link(emp_id, new_pass, link_type="email_password", extra={"username": email_addr})
+        replies.append(
+            f"Email Login Credentials 🔐\n"
+            f"Employee: {emp_id} ({user['name']})\n"
+            f"Email: {email_addr}\n\n"
+            f"View your new email password (one-time, expires in 5 min):\n{link}\n\n"
+            f"Please log in and change it."
+        )
+        return replies
+
     # WIFI CREDENTIALS
-    if "wifi" in text:
+    if "wifi" in text or "wi-fi" in text or "wireless" in text or "wi fi" in text:
         if not check_rate_limit(user_id, "wifi"):
             replies.append("Too many WiFi credential requests. Please try again later.")
             return replies
@@ -232,7 +266,7 @@ def handle_message(user_id, text):
         return replies
 
     # 6. CREATE ACCOUNT - admin only
-    if "create account" in text:
+    if "create account" in text or "new account" in text or "add user" in text or "new user" in text or ("create" in text and "user" in text):
         if not is_admin:
             replies.append("You are not authorized to perform this action. Only admins can create accounts.")
             return replies
@@ -266,7 +300,7 @@ def handle_message(user_id, text):
         return replies
 
     # ADMIN: List all users
-    if text == "list users" or text == "list all users":
+    if text in ("list users", "list all users", "users", "list", "all users") or "list" in text and "user" in text:
         if not is_admin:
             replies.append("You are not authorized to perform this action.")
             return replies
@@ -307,12 +341,22 @@ def handle_message(user_id, text):
         return replies
 
     # SHOW AVAILABLE SERVICES (authenticated users only)
-    if " ".join(text.split()) == "show available services":
+    service_words = {"services", "service", "available", "menu", "help", "options", "list", "commands"}
+    show_services = (
+        norm in ("show available services", "available services", "show services", "list services",
+                 "services", "service", "menu", "help", "options", "commands", "available")
+        or norm.startswith("show") and "service" in norm
+        or "services" in norm.split()
+    )
+    if show_services:
         services = [
             "My Account - view your employee record",
+            "Active / AD - Active Directory username and password",
             "Reset Password / AD Password - reset your Active Directory password",
-            "AD Credentials - show AD username and reset AD password",
+            "Email - email login username and password",
             "WiFi - get IT WiFi credentials",
+            "Create Account (admin) - create a new employee account",
+            "List Users (admin) - list all users",
         ]
         if is_admin:
             services += [
@@ -380,7 +424,12 @@ def burn(token):
     except Exception:
         name = emp_id
         username = extra.get("username", emp_id)
-    title = "Active Directory Password Reset ✅" if link_type == "ad_password" else "Password Reset ✅"
+    if link_type == "ad_password":
+        title = "Active Directory Password Reset ✅"
+    elif link_type == "email_password":
+        title = "Email Password Reset ✅"
+    else:
+        title = "Password Reset ✅"
     html = (f"<!DOCTYPE html><html><body style='font-family:Arial;text-align:center;padding:40px'>"
             f"<h2>{title}</h2>"
             f"<p><b>Employee:</b> {emp_id} ({name})</p>"
