@@ -164,7 +164,7 @@ def handle_message(user_id, text):
                 return replies
             # Ask for secret key
             pending_auth[user_id] = emp_id
-            replies.append("Please enter your secret key (last 4 digits of your National ID).\nFor demo, use: 0000")
+            replies.append("Please enter your secret code.\nFor demo, use: 0000")
         else:
             replies.append("Access denied. You are not authorized to use this application.")
         return replies
